@@ -89,4 +89,3 @@ func remove_player(player_id: int):
 	if players.has(player_id):
 		players[player_id].queue_free()
 		players.erase(player_id)
-

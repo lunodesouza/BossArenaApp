@@ -41,11 +41,7 @@ func _on_confirm_pressed():
 	
 	# Salvar nome
 	if PlayerData.set_player_name(player_name_input):
-		status_label.text = "Nome salvo!"
-		status_label.modulate = Color.GREEN
-		
 		# Ir para o menu principal
-		await get_tree().create_timer(0.5).timeout
 		get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
 	else:
 		status_label.text = "Erro ao salvar nome!"

@@ -16,12 +16,12 @@ func _ready():
 	player_name_label.text = "Jogador: " + PlayerData.get_player_name()
 	
 	# Configurar opções do servidor
-	server_option.add_item("tomfol.io (Público)")
-	server_option.add_item("localhost (Local)")
+	server_option.add_item("Público")
+	server_option.add_item("Local")
 	server_option.selected = 0  # Padrão: tomfol.io
 	
 	# Focar no input de código de sala
-	room_code_input.placeholder_text = "Cole o OID da sala aqui"
+	room_code_input.placeholder_text = "Cole o código da sala aqui"
 
 func _get_noray_address() -> String:
 	if server_option.selected == 0:
