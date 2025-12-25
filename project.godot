@@ -1,0 +1,31 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Netfox-multi"
+run/main_scene="res://scenes/PlayerName.tscn"
+config/features=PackedStringArray("4.5", "Mobile")
+config/icon="res://assets/icon.svg"
+
+[autoload]
+
+NetworkManager="*res://scripts/NetworkManager.gd"
+Noray="*res://addons/netfox.noray/noray.gd"
+PacketHandshake="*res://addons/netfox.noray/packet-handshake.gd"
+PlayerData="*res://scripts/PlayerData.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/netfox.internals/plugin.cfg", "res://addons/netfox.noray/plugin.cfg")
+
+[rendering]
+
+renderer/rendering_method="mobile"
