@@ -4,6 +4,9 @@ extends Node
 
 const MAX_PLAYERS = 4
 const PORT = 7777
+const DEFAULT_NORAY_ADDRESS := "tomfol.io"
+const DEFAULT_NORAY_PORT := 8890
+const DEBUG_LOG := false
 
 var multiplayer_peer: ENetMultiplayerPeer
 var is_host: bool = false
@@ -23,26 +26,9 @@ signal connection_failed
 signal player_connected(player_id: int)
 signal player_disconnected(player_id: int)
 
-## Gera um código de sala no formato HTTR-PCC7 (4 letras - 3 letras + número)
-func generate_room_code() -> String:
-	var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	var numbers = "0123456789"
-	
-	var code = ""
-	# Primeira parte: 4 letras
-	for i in range(4):
-		code += letters[randi() % letters.length()]
-	
-	code += "-"
-	
-	# Segunda parte: 3 letras
-	for i in range(3):
-		code += letters[randi() % letters.length()]
-	
-	# Adicionar um número no final
-	code += numbers[randi() % numbers.length()]
-	
-	return code
+func _log(msg: String) -> void:
+	if DEBUG_LOG:
+		print(msg)
 
 ## Converte OID do noray para um código de sala mais legível (formato HTTR-PCC7)
 func oid_to_room_code(oid: String) -> String:
@@ -84,12 +70,18 @@ func _ready():
 	if not Noray.on_connect_relay.is_connected(_on_noray_connect_relay):
 		Noray.on_connect_relay.connect(_on_noray_connect_relay)
 
-func start_host(noray_address: String = "tomfol.io", noray_port: int = 8890):
-	print("Iniciando como Host...")
+func start_host(noray_address: String = DEFAULT_NORAY_ADDRESS, noray_port: int = DEFAULT_NORAY_PORT):
+	_log("Iniciando como Host...")
 	is_host = true
 	role = Role.HOST
 	_client_connected = false
 	_client_relay_requested = false
+	is_connecting = false
+	host_oid = ""
+	room_code = ""
+	# Ensure we don't keep an old peer around
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer = null
 	
 	# Conectar ao noray (é uma coroutine, precisa de await)
 	var err = await Noray.connect_to_host(noray_address, noray_port)
@@ -111,8 +103,8 @@ func start_host(noray_address: String = "tomfol.io", noray_port: int = 8890):
 	
 	# Gerar código de sala a partir do OID
 	room_code = oid_to_room_code(Noray.oid)
-	print("Host registrado com OID: ", Noray.oid)
-	print("Código da sala: ", room_code)
+	_log("Host registrado com OID: %s" % Noray.oid)
+	_log("Código da sala: %s" % room_code)
 	
 	# Registrar porta remota
 	err = await Noray.register_remote()
@@ -123,7 +115,7 @@ func start_host(noray_address: String = "tomfol.io", noray_port: int = 8890):
 	
 	# Usar a porta registrada no Noray (importante para o handshake funcionar)
 	var server_port = Noray.local_port if Noray.local_port > 0 else PORT
-	print("Usando porta registrada: ", server_port)
+	_log("Usando porta registrada: %s" % server_port)
 	
 	# Criar servidor ENet na porta registrada
 	# No Windows, não podemos fazer bind na mesma porta duas vezes,
@@ -149,16 +141,21 @@ func start_host(noray_address: String = "tomfol.io", noray_port: int = 8890):
 	# Habilitar relay no servidor (como no exemplo)
 	multiplayer.server_relay = true
 	
-	print("Servidor ENet criado na porta ", server_port)
+	_log("Servidor ENet criado na porta %s" % server_port)
 	connection_succeeded.emit()
 
-func start_client(host_oid_to_connect: String, noray_address: String = "tomfol.io", noray_port: int = 8890):
-	print("Conectando como Cliente...")
+func start_client(host_oid_to_connect: String, noray_address: String = DEFAULT_NORAY_ADDRESS, noray_port: int = DEFAULT_NORAY_PORT):
+	_log("Conectando como Cliente...")
 	is_host = false
 	role = Role.CLIENT
 	host_oid = host_oid_to_connect
 	_client_connected = false
 	_client_relay_requested = false
+	is_connecting = false
+	room_code = ""
+	# Ensure we don't keep an old peer around
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer = null
 	
 	# Conectar ao noray (é uma coroutine, precisa de await)
 	var err = await Noray.connect_to_host(noray_address, noray_port)
@@ -183,7 +180,7 @@ func start_client(host_oid_to_connect: String, noray_address: String = "tomfol.i
 	if err != OK:
 		print("Erro ao registrar porta remota: ", err)
 		# Continuar mesmo assim, pode funcionar via NAT direto, mas relay pode falhar
-		print("Continuando sem porta remota registrada (relay pode falhar)...")
+		_log("Continuando sem porta remota registrada (relay pode falhar)...")
 	
 	# Ask noray to connect (noray will emit on_connect_nat / on_connect_relay with address:port)
 	err = Noray.connect_nat(host_oid_to_connect)
@@ -205,19 +202,19 @@ func _handle_connect_nat(address: String, port: int) -> void:
 	# If client failed to connect over NAT, try again over relay (same as netfox example)
 	if err != OK and role == Role.CLIENT and not _client_relay_requested and not _client_connected:
 		_client_relay_requested = true
-		print("NAT connect falhou (%s), tentando relay..." % error_string(err))
+		_log("NAT connect falhou (%s), tentando relay..." % error_string(err))
 		Noray.connect_relay(host_oid)
 
 func _handle_connect_relay(address: String, port: int) -> void:
 	var err = await _handle_connect(address, port)
 	if err != OK and role == Role.CLIENT and not _client_connected:
-		print("Relay connect falhou (%s)" % error_string(err))
+		_log("Relay connect falhou (%s)" % error_string(err))
 		connection_failed.emit()
 
 func _handle_connect(address: String, port: int) -> Error:
 	# Evitar múltiplas tentativas de conexão simultâneas
 	if is_connecting:
-		print("Já está tentando conectar, ignorando tentativa duplicada")
+		_log("Já está tentando conectar, ignorando tentativa duplicada")
 		return ERR_BUSY
 	
 	# Validar endereço e porta antes de tentar conectar
@@ -233,12 +230,12 @@ func _handle_connect(address: String, port: int) -> Error:
 	if role == Role.HOST:
 		if not multiplayer_peer:
 			return ERR_UNCONFIGURED
-		print("Host: respondendo handshake para ", address, ":", port)
+		_log("Host: respondendo handshake para %s:%s" % [address, port])
 		return await PacketHandshake.over_enet_peer(multiplayer_peer, address, port)
 	
 	# CLIENT: perform UDP handshake, then create ENet client bound to Noray.local_port
 	is_connecting = true
-	print("Conectando ao host em ", address, ":", port)
+	_log("Conectando ao host em %s:%s" % [address, port])
 	
 	# Fazer handshake ANTES de criar o cliente ENet
 	# O handshake deve usar a porta registrada no Noray
@@ -255,7 +252,7 @@ func _handle_connect(address: String, port: int) -> Error:
 			return bind_result
 	
 	udp.set_dest_address(address, port)
-	print("Iniciando handshake UDP de ", bind_port, " para ", address, ":", port)
+	_log("Iniciando handshake UDP de %s para %s:%s" % [bind_port, address, port])
 	
 	var handshake_result = await PacketHandshake.over_packet_peer(udp, 8.0, 0.1)
 	udp.close()
@@ -263,14 +260,14 @@ func _handle_connect(address: String, port: int) -> Error:
 	# ERR_BUSY significa que conseguimos ler e escrever, mas o handshake completo não foi confirmado.
 	# O exemplo oficial tenta conectar mesmo assim.
 	if handshake_result == ERR_BUSY:
-		print("Handshake parcial (ERR_BUSY) - tentando conectar mesmo assim...")
+		_log("Handshake parcial (ERR_BUSY) - tentando conectar mesmo assim...")
 		# Continuar com a conexão
 	elif handshake_result != OK:
-		print("Handshake falhou com código: ", handshake_result)
+		_log("Handshake falhou com código: %s" % handshake_result)
 		is_connecting = false
 		return handshake_result
 	
-	print("Handshake bem-sucedido! Criando cliente ENet...")
+	_log("Handshake bem-sucedido! Criando cliente ENet...")
 	
 	# Criar cliente ENet após handshake bem-sucedido
 	# IMPORTANTE: Passar Noray.local_port como último parâmetro (porta local)
@@ -283,42 +280,42 @@ func _handle_connect(address: String, port: int) -> Error:
 		return err
 	
 	multiplayer.multiplayer_peer = multiplayer_peer
-	print("Cliente ENet criado na porta local ", local_port_for_client)
+	_log("Cliente ENet criado na porta local %s" % local_port_for_client)
 	
 	# Aguardar conexão estabelecida
 	while multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTING:
 		await get_tree().process_frame
 	
 	if multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
-		print("Falha ao conectar com status: ", multiplayer_peer.get_connection_status())
+		_log("Falha ao conectar com status: %s" % multiplayer_peer.get_connection_status())
 		multiplayer.multiplayer_peer = null
 		is_connecting = false
 		return ERR_CANT_CONNECT
 	
-	print("Cliente ENet conectado!")
+	_log("Cliente ENet conectado!")
 	_client_connected = true
 	# Não emitir connection_succeeded aqui - deixar o sinal connected_to_server fazer isso
 	is_connecting = false
 	return OK
 
 func _on_peer_connected(player_id: int):
-	print("Jogador conectado: ", player_id)
+	_log("Jogador conectado: %s" % player_id)
 	player_connected.emit(player_id)
 
 func _on_peer_disconnected(player_id: int):
-	print("Jogador desconectado: ", player_id)
+	_log("Jogador desconectado: %s" % player_id)
 	player_disconnected.emit(player_id)
 
 func _on_connected_to_server():
-	print("Conectado ao servidor!")
+	_log("Conectado ao servidor!")
 	connection_succeeded.emit()
 
 func _on_connection_failed():
-	print("Falha na conexão!")
+	_log("Falha na conexão!")
 	connection_failed.emit()
 
 func _on_server_disconnected():
-	print("Servidor desconectado!")
+	_log("Servidor desconectado!")
 	connection_failed.emit()
 
 

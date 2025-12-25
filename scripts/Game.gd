@@ -6,6 +6,8 @@ const PlayerScene = preload("res://scenes/Player.tscn")
 
 var players: Dictionary = {}
 var spawn_positions: Dictionary = {} # player_id -> Vector2 (server-authoritative)
+const GRID_SPACING := 120.0
+const GRID_COLS := 4
 
 func _ready():
 	# Criar o próprio player localmente
@@ -28,13 +30,11 @@ func _server_get_spawn_position(player_id: int) -> Vector2:
 		return spawn_positions[player_id]
 	# Simple grid around origin (stable, avoids collisions)
 	var idx := spawn_positions.size()
-	var spacing := 120.0
-	var cols := 4
-	var x := (idx % cols) * spacing
-	var y := int(idx / cols) * spacing
+	var x := (idx % GRID_COLS) * GRID_SPACING
+	var y := int(idx / GRID_COLS) * GRID_SPACING
 	var pos := Vector2(x, y)
 	# Center around 0,0
-	pos -= Vector2((cols - 1) * spacing * 0.5, spacing * 0.5)
+	pos -= Vector2((GRID_COLS - 1) * GRID_SPACING * 0.5, GRID_SPACING * 0.5)
 	spawn_positions[player_id] = pos
 	return pos
 

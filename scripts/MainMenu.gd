@@ -8,9 +8,7 @@ extends Control
 @onready var server_option: OptionButton = $VBoxContainer/ServerOption
 
 func _ready():
-	# Sinais já estão conectados na cena, não precisamos conectar novamente
-	# host_button.pressed.connect(_on_host_pressed)
-	# client_button.pressed.connect(_on_client_pressed)
+	# Sinais de UI já estão conectados na cena (.tscn)
 	NetworkManager.connection_succeeded.connect(_on_connection_succeeded)
 	NetworkManager.connection_failed.connect(_on_connection_failed)
 	

@@ -9,9 +9,7 @@ func _ready():
 	if PlayerData.has_set_name:
 		name_input.text = PlayerData.player_name
 	
-	# Sinais já estão conectados na cena, não precisamos conectar novamente aqui
-	# name_input.text_submitted.connect(_on_name_submitted)
-	# confirm_button.pressed.connect(_on_confirm_pressed)
+	# Sinais de UI já estão conectados na cena (.tscn)
 	
 	# Focar no input
 	name_input.grab_focus()

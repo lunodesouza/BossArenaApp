@@ -8,6 +8,11 @@ extends Control
 
 var players: Dictionary = {}  # player_id -> player_name
 var player_count: int = 0
+const DEBUG_LOG := false
+
+func _log(msg: String) -> void:
+	if DEBUG_LOG:
+		print(msg)
 
 func _get_player_name() -> String:
 	# Avoid hard dependency on autoload symbol at compile-time.
@@ -22,19 +27,12 @@ func _ready():
 		# Mostrar código formatado e OID real
 		room_code_label.text = "Código: " + NetworkManager.room_code + "\nOID: " + Noray.oid
 		start_button.visible = true
-		# Sinais já estão conectados na cena, não precisamos conectar novamente
-		# start_button.pressed.connect(_on_start_pressed)
 	else:
 		room_code_label.text = "Aguardando host iniciar o jogo..."
 		start_button.visible = false
 	
-	# Sinais já estão conectados na cena
-	# back_button.pressed.connect(_on_back_pressed)
-	
 	if NetworkManager.is_host:
 		copy_button.visible = true
-		# Sinais já estão conectados na cena
-		# copy_button.pressed.connect(_on_copy_pressed)
 	else:
 		copy_button.visible = false
 	
@@ -85,7 +83,7 @@ func send_player_name_to_server(player_name: String):
 		return
 	
 	var sender_id = multiplayer.get_remote_sender_id()
-	print("Servidor recebeu nome do player ", sender_id, ": ", player_name)
+	_log("Servidor recebeu nome do player %s: %s" % [sender_id, player_name])
 	_add_player(sender_id, player_name)
 	_update_players_list()
 	
@@ -99,14 +97,14 @@ func request_player_name():
 		return
 	
 	var my_name = _get_player_name()
-	print("Cliente recebeu solicitação de nome, enviando: ", my_name)
+	_log("Cliente recebeu solicitação de nome, enviando: %s" % my_name)
 	# Cliente responde com seu nome
 	send_player_name_to_server.rpc_id(1, my_name)
 
 # Servidor transmite nome para todos os clientes
 @rpc("any_peer", "call_local", "reliable")
 func broadcast_player_name(player_id: int, player_name: String):
-	print("Recebido broadcast de nome: Player ", player_id, " = ", player_name)
+	_log("Recebido broadcast de nome: Player %s = %s" % [player_id, player_name])
 	_add_player(player_id, player_name)
 	_update_players_list()
 
@@ -166,8 +164,7 @@ func _on_player_connected(player_id: int):
 		# First, ensure the new client learns about the host (and any already known players).
 		_send_full_roster_to_peer(player_id)
 		request_player_name.rpc_id(player_id)
-		# Also broadcast host name to everyone (covers cases where client never had host entry)
-		broadcast_player_name.rpc(1, players.get(1, _get_player_name()))
+		# Host name is already broadcast in _ready(); no need to spam it here.
 
 func _on_player_disconnected(player_id: int):
 	_remove_player(player_id)
