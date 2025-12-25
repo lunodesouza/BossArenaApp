@@ -40,6 +40,7 @@ signal connection_failed
 signal player_connected(player_id: int)
 signal player_disconnected(player_id: int)
 signal player_name_updated(player_id: int, player_name: String)
+signal server_disconnected
 
 func _get_local_player_name_safe() -> String:
 	var pd = get_tree().root.get_node_or_null("PlayerData")
@@ -375,6 +376,7 @@ func _on_connection_failed():
 
 func _on_server_disconnected():
 	_log("Servidor desconectado!")
+	server_disconnected.emit()
 	connection_failed.emit()
 
 

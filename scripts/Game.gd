@@ -9,6 +9,7 @@ const PlayerScene = preload("res://scenes/Player.tscn")
 const BulletScene = preload("res://scenes/Bullet.tscn")
 const EnemyBulletScene = preload("res://scenes/EnemyBullet.tscn")
 const BossScene = preload("res://scenes/Boss.tscn")
+const DisconnectOverlayScene = preload("res://scenes/ui/DisconnectOverlay.tscn")
 
 var players: Dictionary = {}
 var spawn_positions: Dictionary = {} # player_id -> Vector2 (server-authoritative)
@@ -20,6 +21,7 @@ const PLAYER_DEATH_RESPAWN_DELAY := 1.0
 
 var _local_player_id: int = 0
 var _camera_target: Node2D = null
+var _disconnect_overlay: CanvasLayer = null
 
 func _ready():
 	# Criar o próprio player localmente
@@ -41,6 +43,21 @@ func _ready():
 	
 	NetworkManager.player_connected.connect(_on_player_connected)
 	NetworkManager.player_disconnected.connect(_on_player_disconnected)
+	NetworkManager.server_disconnected.connect(_on_server_disconnected)
+	_setup_disconnect_overlay()
+
+func _setup_disconnect_overlay() -> void:
+	if _disconnect_overlay != null:
+		return
+	_disconnect_overlay = DisconnectOverlayScene.instantiate()
+	add_child(_disconnect_overlay)
+
+func _on_server_disconnected() -> void:
+	# Only clients should react
+	if multiplayer.is_server():
+		return
+	if _disconnect_overlay and _disconnect_overlay.has_method("show_disconnect"):
+		_disconnect_overlay.call("show_disconnect", "Desconectado do servidor")
 
 func _setup_camera_follow(local_id: int) -> void:
 	if camera == null:

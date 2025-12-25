@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://gqglsq0ukyuu" path="res://scripts/Boss.gd" id="1_boss"]
 [ext_resource type="Texture2D" uid="uid://bwjb0cs1pb7ex" path="res://assets/boses/cultist_priest_takehit_3.png" id="2_gif"]
 [ext_resource type="Script" uid="uid://dn20ip8dlhk88" path="res://scripts/stats/BossStats.gd" id="3_stats"]
+[ext_resource type="Script" path="res://scripts/boss/BossBrain.gd" id="4_brain"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_1"]
 radius = 48.0
@@ -59,3 +60,6 @@ script = ExtResource("3_stats")
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="Stats"]
 root_path = NodePath("..")
 replication_config = SubResource("SceneReplicationConfig_boss_stats")
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("4_brain")

@@ -9,6 +9,8 @@ extends Control
 var players: Dictionary = {}  # player_id -> player_name
 var player_count: int = 0
 const DEBUG_LOG := false
+const DisconnectOverlayScene = preload("res://scenes/ui/DisconnectOverlay.tscn")
+var _disconnect_overlay: CanvasLayer = null
 
 func _log(msg: String) -> void:
 	if DEBUG_LOG:
@@ -39,6 +41,8 @@ func _ready():
 	NetworkManager.player_connected.connect(_on_player_connected)
 	NetworkManager.player_disconnected.connect(_on_player_disconnected)
 	NetworkManager.player_name_updated.connect(_on_player_name_updated)
+	NetworkManager.server_disconnected.connect(_on_server_disconnected)
+	_setup_disconnect_overlay()
 	
 	# Adicionar o próprio jogador
 	var my_id = multiplayer.get_unique_id()
@@ -60,6 +64,18 @@ func _ready():
 	
 	# Atualizar lista
 	_update_players_list()
+
+func _setup_disconnect_overlay() -> void:
+	if _disconnect_overlay != null:
+		return
+	_disconnect_overlay = DisconnectOverlayScene.instantiate()
+	add_child(_disconnect_overlay)
+
+func _on_server_disconnected() -> void:
+	if multiplayer.is_server():
+		return
+	if _disconnect_overlay and _disconnect_overlay.has_method("show_disconnect"):
+		_disconnect_overlay.call("show_disconnect", "Desconectado do servidor")
 
 func _wait_for_connection() -> void:
 	# Aguardar até estar conectado (máximo 5 segundos)

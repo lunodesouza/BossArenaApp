@@ -1,9 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://dfhs4hh6rkklq"]
+[gd_scene load_steps=8 format=3 uid="uid://dfhs4hh6rkklq"]
 
 [ext_resource type="Script" uid="uid://c64mgh1d5auho" path="res://scripts/Player.gd" id="1_1"]
-[ext_resource type="Texture2D" uid="uid://bvhj1qrgnnuj6" path="res://assets/icon.svg" id="2_1"]
-[ext_resource type="Script" path="res://scripts/stats/StatsComponent.gd" id="3_stats"]
-[ext_resource type="Script" path="res://scripts/ui/PlayerNameplate.gd" id="4_nameplate"]
+[ext_resource type="Texture2D" uid="uid://dhh0pcarepwfc" path="res://assets/players/nicolas-cage.png" id="2_mdl7e"]
+[ext_resource type="Script" uid="uid://7gd2xjrb1fl3" path="res://scripts/stats/StatsComponent.gd" id="3_stats"]
+[ext_resource type="Script" uid="uid://bag5xyjxwdy0k" path="res://scripts/ui/PlayerNameplate.gd" id="4_nameplate"]
 
 [sub_resource type="RectangleShape2D" id="1_rect"]
 size = Vector2(128, 128)
@@ -11,54 +11,46 @@ size = Vector2(128, 128)
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
-properties/0/sync = true
-properties/0/watch = false
+properties/0/replication_mode = 1
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_stats"]
 properties/0/path = NodePath(".:class_id")
 properties/0/spawn = true
-properties/0/sync = true
-properties/0/watch = false
+properties/0/replication_mode = 1
 properties/1/path = NodePath(".:level")
 properties/1/spawn = true
-properties/1/sync = true
-properties/1/watch = false
+properties/1/replication_mode = 1
 properties/2/path = NodePath(".:xp")
 properties/2/spawn = true
-properties/2/sync = true
-properties/2/watch = false
+properties/2/replication_mode = 1
 properties/3/path = NodePath(".:hp")
 properties/3/spawn = true
-properties/3/sync = true
-properties/3/watch = false
+properties/3/replication_mode = 1
 
 [node name="Player" type="CharacterBody2D"]
-script = ExtResource("1_1")
 collision_layer = 2
-collision_mask = 1
+script = ExtResource("1_1")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("2_1")
+texture = ExtResource("2_mdl7e")
 
 [node name="Nameplate" type="Label" parent="."]
-text = ""
-horizontal_alignment = 1
-vertical_alignment = 0
+offset_left = -90.0
+offset_top = -155.0
+offset_right = 90.0
+offset_bottom = -65.0
 theme_override_font_sizes/font_size = 14
-position = Vector2(-90, -155)
-size = Vector2(180, 90)
+horizontal_alignment = 1
 script = ExtResource("4_nameplate")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("1_rect")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
-root_path = NodePath("..")
 replication_config = SubResource("SceneReplicationConfig_player")
 
 [node name="Stats" type="Node" parent="."]
 script = ExtResource("3_stats")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="Stats"]
-root_path = NodePath("..")
 replication_config = SubResource("SceneReplicationConfig_stats")

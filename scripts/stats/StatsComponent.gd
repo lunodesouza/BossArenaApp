@@ -15,23 +15,12 @@ var base_stats: PlayerStats
 @onready var synchronizer: MultiplayerSynchronizer = $MultiplayerSynchronizer
 
 func _ready() -> void:
-	# Determine authority from parent (Player has player_id)
-	var auth_id := 1
-	var parent := get_parent()
-	if parent:
-		# Using get("player_id") is safe even if the property doesn't exist (returns null)
-		var pid = parent.get("player_id")
-		if typeof(pid) == TYPE_INT and int(pid) != 0:
-			auth_id = int(pid)
-		else:
-			auth_id = multiplayer.get_unique_id()
-	else:
-		auth_id = multiplayer.get_unique_id()
-
-	set_multiplayer_authority(auth_id)
+	# Server-authoritative stats: HP/XP/Level are decided on the server.
+	# This avoids clients getting "stuck" HP (e.g., at 1) due to authority mismatch.
+	set_multiplayer_authority(1)
 
 	if synchronizer:
-		synchronizer.set_multiplayer_authority(auth_id)
+		synchronizer.set_multiplayer_authority(1)
 		# Replication config is defined in the scene; only fall back if missing.
 		if synchronizer.replication_config == null:
 			var cfg := SceneReplicationConfig.new()
