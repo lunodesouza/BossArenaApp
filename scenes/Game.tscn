@@ -7,6 +7,10 @@ script = ExtResource("1_1")
 
 [node name="PlayersContainer" type="Node2D" parent="."]
 
+[node name="ProjectilesContainer" type="Node2D" parent="."]
+
+[node name="BossContainer" type="Node2D" parent="."]
+
 [node name="Camera2D" type="Camera2D" parent="."]
 current = true
 

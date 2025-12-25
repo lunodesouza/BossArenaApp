@@ -38,31 +38,25 @@ func _ready():
 	
 	NetworkManager.player_connected.connect(_on_player_connected)
 	NetworkManager.player_disconnected.connect(_on_player_disconnected)
+	NetworkManager.player_name_updated.connect(_on_player_name_updated)
 	
 	# Adicionar o próprio jogador
 	var my_id = multiplayer.get_unique_id()
 	_add_player(my_id, _get_player_name())
+	NetworkManager.set_player_name(my_id, _get_player_name())
 	
-	# Enviar nosso nome para outros players
-	if multiplayer.is_server():
-		# Ensure host name is broadcast (clients that load Lobby after connecting still get it)
-		broadcast_player_name.rpc(1, _get_player_name())
-		
-		# Servidor não precisa enviar, já tem seu próprio nome
-		# Mas precisa solicitar nomes dos clientes conectados
-		for peer_id in multiplayer.get_peers():
-			_add_player(peer_id, "Jogador " + str(peer_id))  # Nome temporário
-			# Push our current roster to peers that are already connected (common case!)
-			_send_full_roster_to_peer(peer_id)
-			# Solicitar nome do cliente
-			request_player_name.rpc_id(peer_id)
-	else:
-		# Cliente aguarda estar conectado antes de enviar nome
+	# Populate from NetworkManager cache (works across scenes, no Lobby RPCs)
+	for pid in NetworkManager.player_names.keys():
+		_add_player(int(pid), NetworkManager.get_player_name(int(pid)))
+	
+	# Ensure roster is available on clients (NetworkManager will also request on connect)
+	if not multiplayer.is_server():
 		await _wait_for_connection()
 		if multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
-			send_player_name_to_server.rpc_id(1, _get_player_name())
-			# Ask server for full roster (covers the case where we joined before Lobby was loaded)
-			request_full_roster.rpc_id(1)
+			NetworkManager.rpc_request_roster.rpc_id(1)
+	else:
+		# Host broadcasts its name via autoload RPC so clients get it even if Lobby is gone later
+		NetworkManager.rpc_player_name_updated.rpc(1, _get_player_name())
 	
 	# Atualizar lista
 	_update_players_list()
@@ -76,35 +70,7 @@ func _wait_for_connection() -> void:
 		await get_tree().create_timer(0.1).timeout
 		timeout -= 0.1
 
-# Cliente envia nome para servidor
-@rpc("any_peer", "reliable")
-func send_player_name_to_server(player_name: String):
-	if not multiplayer.is_server():
-		return
-	
-	var sender_id = multiplayer.get_remote_sender_id()
-	_log("Servidor recebeu nome do player %s: %s" % [sender_id, player_name])
-	_add_player(sender_id, player_name)
-	_update_players_list()
-	
-	# Servidor retransmite para todos os outros clientes
-	broadcast_player_name.rpc(sender_id, player_name)
-
-# Servidor solicita nome do cliente
-@rpc("any_peer", "reliable")
-func request_player_name():
-	if multiplayer.is_server():
-		return
-	
-	var my_name = _get_player_name()
-	_log("Cliente recebeu solicitação de nome, enviando: %s" % my_name)
-	# Cliente responde com seu nome
-	send_player_name_to_server.rpc_id(1, my_name)
-
-# Servidor transmite nome para todos os clientes
-@rpc("any_peer", "call_local", "reliable")
-func broadcast_player_name(player_id: int, player_name: String):
-	_log("Recebido broadcast de nome: Player %s = %s" % [player_id, player_name])
+func _on_player_name_updated(player_id: int, player_name: String) -> void:
 	_add_player(player_id, player_name)
 	_update_players_list()
 
@@ -114,21 +80,7 @@ func _add_player(player_id: int, player_name: String):
 		players[player_id] = player_name
 		player_count = players.size()
 
-func _send_full_roster_to_peer(peer_id: int) -> void:
-	# Send all currently known players (including host) to a newly joined peer.
-	# This fixes "client doesn't see server" in lobby.
-	if not multiplayer.is_server():
-		return
-	for pid in players.keys():
-		broadcast_player_name.rpc_id(peer_id, pid, players[pid])
-
-@rpc("any_peer", "reliable")
-func request_full_roster():
-	# Client asks server to resend the full roster.
-	if not multiplayer.is_server():
-		return
-	var requester_id = multiplayer.get_remote_sender_id()
-	_send_full_roster_to_peer(requester_id)
+## Roster RPCs moved to NetworkManager (autoload) to avoid "Lobby not found" after scene changes.
 
 func _remove_player(player_id: int):
 	if players.has(player_id):
@@ -158,13 +110,6 @@ func _on_player_connected(player_id: int):
 	# Nome será atualizado quando receber via RPC
 	_add_player(player_id, "Jogador " + str(player_id))
 	_update_players_list()
-	
-	# Se for servidor, solicitar nome do novo cliente
-	if multiplayer.is_server():
-		# First, ensure the new client learns about the host (and any already known players).
-		_send_full_roster_to_peer(player_id)
-		request_player_name.rpc_id(player_id)
-		# Host name is already broadcast in _ready(); no need to spam it here.
 
 func _on_player_disconnected(player_id: int):
 	_remove_player(player_id)
@@ -173,11 +118,7 @@ func _on_player_disconnected(player_id: int):
 func _on_start_pressed():
 	if NetworkManager.is_host and player_count > 0:
 		# Servidor inicia o jogo para todos
-		start_game.rpc()
-
-@rpc("any_peer", "call_local", "reliable")
-func start_game():
-	get_tree().change_scene_to_file("res://scenes/Game.tscn")
+		NetworkManager.rpc_start_game.rpc()
 
 func _on_copy_pressed():
 	if NetworkManager.is_host and not Noray.oid.is_empty():

@@ -21,10 +21,59 @@ var role: Role = Role.NONE
 var _client_connected: bool = false
 var _client_relay_requested: bool = false
 
+# Persisted across scenes (Lobby -> Game): peer_id -> player_name
+var player_names: Dictionary = {}
+
+func set_player_name(player_id: int, player_name: String) -> void:
+	if player_id <= 0:
+		return
+	if player_name.strip_edges().is_empty():
+		return
+	player_names[player_id] = player_name.strip_edges()
+	player_name_updated.emit(player_id, player_names[player_id])
+
+func get_player_name(player_id: int) -> String:
+	return player_names.get(player_id, "Player %s" % player_id)
+
 signal connection_succeeded
 signal connection_failed
 signal player_connected(player_id: int)
 signal player_disconnected(player_id: int)
+signal player_name_updated(player_id: int, player_name: String)
+
+func _get_local_player_name_safe() -> String:
+	var pd = get_tree().root.get_node_or_null("PlayerData")
+	if pd and pd.has_method("get_player_name"):
+		return str(pd.call("get_player_name"))
+	return "Jogador"
+
+@rpc("any_peer", "reliable")
+func rpc_set_my_name(player_name: String) -> void:
+	# Client -> Server
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	set_player_name(sender_id, player_name)
+	# Broadcast to everyone (including server)
+	rpc_player_name_updated.rpc(sender_id, get_player_name(sender_id))
+
+@rpc("any_peer", "call_local", "reliable")
+func rpc_player_name_updated(player_id: int, player_name: String) -> void:
+	# Server -> All
+	set_player_name(player_id, player_name)
+
+@rpc("any_peer", "reliable")
+func rpc_request_roster() -> void:
+	# Client -> Server: ask for all known names
+	if not multiplayer.is_server():
+		return
+	var requester_id := multiplayer.get_remote_sender_id()
+	for pid in player_names.keys():
+		rpc_player_name_updated.rpc_id(requester_id, int(pid), str(player_names[pid]))
+
+@rpc("any_peer", "call_local", "reliable")
+func rpc_start_game() -> void:
+	get_tree().change_scene_to_file("res://scenes/Game.tscn")
 
 func _log(msg: String) -> void:
 	if DEBUG_LOG:
@@ -79,6 +128,7 @@ func start_host(noray_address: String = DEFAULT_NORAY_ADDRESS, noray_port: int =
 	is_connecting = false
 	host_oid = ""
 	room_code = ""
+	player_names.clear()
 	# Ensure we don't keep an old peer around
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer = null
@@ -153,6 +203,7 @@ func start_client(host_oid_to_connect: String, noray_address: String = DEFAULT_N
 	_client_relay_requested = false
 	is_connecting = false
 	room_code = ""
+	player_names.clear()
 	# Ensure we don't keep an old peer around
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer = null
@@ -301,6 +352,10 @@ func _handle_connect(address: String, port: int) -> Error:
 func _on_peer_connected(player_id: int):
 	_log("Jogador conectado: %s" % player_id)
 	player_connected.emit(player_id)
+	if multiplayer.is_server():
+		# Push known roster to the new peer, so UI/game can render names without Lobby RPCs.
+		for pid in player_names.keys():
+			rpc_player_name_updated.rpc_id(player_id, int(pid), str(player_names[pid]))
 
 func _on_peer_disconnected(player_id: int):
 	_log("Jogador desconectado: %s" % player_id)
@@ -309,6 +364,10 @@ func _on_peer_disconnected(player_id: int):
 func _on_connected_to_server():
 	_log("Conectado ao servidor!")
 	connection_succeeded.emit()
+	if role == Role.CLIENT:
+		# Send our name + request roster via autoload RPCs (works across scenes).
+		rpc_set_my_name.rpc_id(1, _get_local_player_name_safe())
+		rpc_request_roster.rpc_id(1)
 
 func _on_connection_failed():
 	_log("Falha na conexão!")
@@ -327,4 +386,5 @@ func disconnect_from_server():
 	role = Role.NONE
 	_client_connected = false
 	_client_relay_requested = false
+	player_names.clear()
 	Noray.disconnect_from_host()
